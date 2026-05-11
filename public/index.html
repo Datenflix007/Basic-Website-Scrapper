@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Basic Website Scraper</title>
+<style>
+  :root {
+    --bg: #0e0e0f;
+    --surface: #18181b;
+    --surface2: #222227;
+    --surface3: #2a2a30;
+    --border: #2e2e35;
+    --border2: #3a3a44;
+    --text: #e8e8f0;
+    --text2: #9090a8;
+    --text3: #5a5a70;
+    --accent: #7c6aff;
+    --accent2: #5b4fcc;
+    --green: #22c97e;
+    --amber: #f5a623;
+    --red: #f04747;
+    --cyan: #36c9d8;
+    --mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    --sans: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 14px; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; }
+
+  /* Layout */
+  .layout { display: grid; grid-template-columns: 320px 1fr; min-height: 100vh; }
+  .sidebar { background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+  .main { display: flex; flex-direction: column; }
+
+  /* Sidebar */
+  .sidebar-head { padding: 20px; border-bottom: 1px solid var(--border); }
+  .logo { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .logo-icon { width: 32px; height: 32px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+  .logo-text { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; }
+  .logo-sub { font-size: 11px; color: var(--text3); margin-top: 1px; }
+
+  .url-form { display: flex; flex-direction: column; gap: 8px; }
+  .url-form input { background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 12px; padding: 9px 12px; border-radius: 8px; outline: none; transition: border 0.15s; }
+  .url-form input:focus { border-color: var(--accent); }
+  .url-form input::placeholder { color: var(--text3); }
+  .url-form input:disabled { opacity: 0.5; }
+
+  .btn { border: none; cursor: pointer; font-family: var(--sans); font-size: 13px; font-weight: 500; border-radius: 8px; transition: all 0.15s; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .btn-primary { background: var(--accent); color: #fff; padding: 9px 16px; }
+  .btn-primary:hover { background: var(--accent2); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-ghost { background: transparent; color: var(--text2); padding: 6px 10px; border: 1px solid var(--border); font-size: 12px; }
+  .btn-ghost:hover { background: var(--surface2); color: var(--text); }
+  .btn-ghost:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-success { background: var(--green); color: #000; padding: 9px 16px; font-weight: 600; }
+  .btn-success:hover { filter: brightness(0.9); }
+  .btn-success:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .areas-section { flex: 1; overflow-y: auto; padding: 16px; }
+  .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .section-label { font-size: 11px; font-weight: 600; color: var(--text3); letter-spacing: 0.08em; text-transform: uppercase; }
+  .sel-actions { display: flex; gap: 4px; }
+
+  .area-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px; border-radius: 8px; cursor: pointer; transition: background 0.1s; margin-bottom: 4px; border: 1px solid transparent; }
+  .area-item:hover { background: var(--surface2); }
+  .area-item.selected { background: rgba(124,106,255,0.1); border-color: rgba(124,106,255,0.3); }
+  .area-item input[type=checkbox] { appearance: none; -webkit-appearance: none; width: 16px; height: 16px; border: 1.5px solid var(--border2); border-radius: 4px; flex-shrink: 0; margin-top: 1px; cursor: pointer; transition: all 0.1s; background: var(--surface3); }
+  .area-item input[type=checkbox]:checked { background: var(--accent); border-color: var(--accent); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='white' d='M2 6l3 3 5-5' stroke='white' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-size: 10px; background-position: center; background-repeat: no-repeat; }
+  .area-info { flex: 1; min-width: 0; }
+  .area-name { font-size: 13px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .area-meta { display: flex; align-items: center; gap: 6px; margin-top: 3px; flex-wrap: wrap; }
+  .area-selector { font-family: var(--mono); font-size: 10px; color: var(--text3); background: var(--surface3); padding: 1px 5px; border-radius: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
+  .count-pill { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 10px; flex-shrink: 0; }
+
+  .cat-text { background: rgba(124,106,255,0.15); color: var(--accent); }
+  .cat-link { background: rgba(54,201,216,0.15); color: var(--cyan); }
+  .cat-number { background: rgba(34,201,126,0.15); color: var(--green); }
+  .cat-media { background: rgba(245,166,35,0.15); color: var(--amber); }
+  .cat-meta { background: rgba(144,144,168,0.15); color: var(--text2); }
+  .cat-table { background: rgba(240,71,71,0.15); color: var(--red); }
+
+  .sidebar-footer { padding: 16px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+
+  /* Main area */
+  .main-header { padding: 24px 28px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--surface); }
+  .main-title { font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
+  .main-subtitle { font-size: 12px; color: var(--text3); margin-top: 3px; font-family: var(--mono); }
+  .header-actions { display: flex; gap: 8px; }
+
+  .results-area { flex: 1; padding: 24px 28px; overflow-y: auto; }
+
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 340px; gap: 12px; text-align: center; }
+  .empty-icon { font-size: 40px; opacity: 0.3; }
+  .empty-title { font-size: 16px; font-weight: 500; color: var(--text2); }
+  .empty-sub { font-size: 13px; color: var(--text3); max-width: 300px; line-height: 1.6; }
+
+  /* Result groups */
+  .result-group { margin-bottom: 20px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .result-group-header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--surface2); border-bottom: 1px solid var(--border); }
+  .result-group-name { font-size: 13px; font-weight: 600; }
+  .result-group-selector { font-family: var(--mono); font-size: 11px; color: var(--text3); flex: 1; }
+  .result-group-count { font-size: 11px; font-weight: 600; color: var(--text2); background: var(--surface3); padding: 2px 8px; border-radius: 10px; }
+
+  .result-row { display: flex; align-items: flex-start; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--border); transition: background 0.08s; }
+  .result-row:last-child { border-bottom: none; }
+  .result-row:hover { background: var(--surface2); }
+  .result-idx { font-size: 11px; color: var(--text3); font-variant-numeric: tabular-nums; min-width: 22px; padding-top: 2px; font-family: var(--mono); }
+  .result-value { font-size: 13px; line-height: 1.5; word-break: break-word; flex: 1; }
+  .result-value a { color: var(--cyan); text-decoration: none; font-family: var(--mono); font-size: 12px; }
+  .result-value a:hover { text-decoration: underline; }
+  .result-extra { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+  /* Status bar */
+  .statusbar { padding: 8px 28px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 12px; font-size: 11px; color: var(--text3); background: var(--surface); }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text3); flex-shrink: 0; }
+  .status-dot.ok { background: var(--green); }
+  .status-dot.loading { background: var(--amber); animation: pulse 1s ease-in-out infinite; }
+  .status-dot.error { background: var(--red); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* Spinner */
+  .spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid rgba(255,255,255,0.2); border-top-color: #fff; border-radius: 50%; animation: spin 0.6s linear infinite; }
+  .spinner.dark { border-color: rgba(0,0,0,0.15); border-top-color: #000; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Error */
+  .error-banner { margin: 16px 28px; padding: 12px 14px; background: rgba(240,71,71,0.1); border: 1px solid rgba(240,71,71,0.3); border-radius: 8px; color: #f07070; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+
+  /* Summary bar */
+  .summary-bar { display: flex; gap: 16px; padding: 14px 28px; border-bottom: 1px solid var(--border); background: var(--surface); flex-wrap: wrap; }
+  .summary-stat { display: flex; flex-direction: column; gap: 2px; }
+  .summary-val { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+  .summary-lbl { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; }
+
+  .no-areas { padding: 20px; text-align: center; color: var(--text3); font-size: 13px; }
+
+  @media (max-width: 700px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { height: auto; position: static; }
+    .main-header, .results-area, .statusbar, .summary-bar, .error-banner { padding-left: 16px; padding-right: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-head">
+      <div class="logo">
+        <div class="logo-icon">🕷️</div>
+        <div>
+          <div class="logo-text">Website Scraper</div>
+          <div class="logo-sub">Basic v1.0</div>
+        </div>
+      </div>
+
+      <div class="url-form">
+        <input id="url-input" type="url" placeholder="https://example.com" />
+        <button class="btn btn-primary" id="analyze-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          Seite analysieren
+        </button>
+      </div>
+    </div>
+
+    <div class="areas-section" id="areas-section">
+      <div class="no-areas" id="areas-empty">URL eingeben und analysieren</div>
+    </div>
+
+    <div class="sidebar-footer">
+      <button class="btn btn-success" id="scrape-btn" disabled>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span id="scrape-btn-label">Bereiche scrapen</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <header class="main-header">
+      <div>
+        <div class="main-title" id="page-title">Kein Ergebnis</div>
+        <div class="main-subtitle" id="page-url">—</div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-ghost" id="export-btn" disabled>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10,9 9,9 8,9"/></svg>
+          JSON Export
+        </button>
+        <button class="btn btn-ghost" id="copy-btn" disabled>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Kopieren
+        </button>
+      </div>
+    </header>
+
+    <div id="summary-bar" style="display:none" class="summary-bar"></div>
+    <div id="error-banner" style="display:none" class="error-banner"></div>
+
+    <div class="results-area" id="results-area">
+      <div class="empty-state">
+        <div class="empty-icon">🔍</div>
+        <div class="empty-title">Noch keine Daten</div>
+        <div class="empty-sub">URL eingeben → analysieren → Bereiche auswählen → scrapen</div>
+      </div>
+    </div>
+
+    <footer class="statusbar">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">Bereit</span>
+    </footer>
+  </main>
+</div>
+
+<script>
+let state = {
+  url: "",
+  areas: [],
+  selected: new Set(),
+  results: null,
+  loading: false,
+};
+
+const $ = id => document.getElementById(id);
+
+function setStatus(msg, type = "idle") {
+  $("status-text").textContent = msg;
+  const dot = $("status-dot");
+  dot.className = "status-dot" + (type === "ok" ? " ok" : type === "loading" ? " loading" : type === "error" ? " error" : "");
+}
+
+function showError(msg) {
+  const el = $("error-banner");
+  el.style.display = "flex";
+  el.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> ${escHtml(msg)}`;
+  setStatus("Fehler: " + msg, "error");
+}
+
+function hideError() { $("error-banner").style.display = "none"; }
+
+function escHtml(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function catClass(cat) {
+  return "cat-" + (cat || "text");
+}
+
+function renderAreas() {
+  const section = $("areas-section");
+  if (!state.areas.length) {
+    section.innerHTML = `<div class="no-areas" id="areas-empty">Keine scrapbaren Bereiche gefunden</div>`;
+    return;
+  }
+
+  const selCount = state.selected.size;
+  let html = `<div class="section-head">
+    <span class="section-label">Bereiche (${state.areas.length})</span>
+    <div class="sel-actions">
+      <button class="btn btn-ghost" onclick="selectAll()">Alle</button>
+      <button class="btn btn-ghost" onclick="deselectAll()">Keine</button>
+    </div>
+  </div>`;
+
+  for (const area of state.areas) {
+    const sel = state.selected.has(area.id);
+    html += `<div class="area-item ${sel ? 'selected' : ''}" onclick="toggleArea('${area.id}')">
+      <input type="checkbox" ${sel ? "checked" : ""} onclick="event.stopPropagation(); toggleArea('${area.id}')" />
+      <div class="area-info">
+        <div class="area-name">${escHtml(area.name)}</div>
+        <div class="area-meta">
+          <span class="area-selector">${escHtml(area.selector)}</span>
+          <span class="count-pill ${catClass(area.category)}">${area.count}</span>
+        </div>
+      </div>
+    </div>`;
+  }
+  section.innerHTML = html;
+
+  const scrapeBtn = $("scrape-btn");
+  const label = $("scrape-btn-label");
+  if (selCount > 0) {
+    scrapeBtn.disabled = false;
+    label.textContent = `${selCount} Bereich${selCount > 1 ? "e" : ""} scrapen`;
+  } else {
+    scrapeBtn.disabled = true;
+    label.textContent = "Bereiche scrapen";
+  }
+}
+
+function toggleArea(id) {
+  if (state.selected.has(id)) state.selected.delete(id);
+  else state.selected.add(id);
+  renderAreas();
+}
+
+function selectAll() { state.areas.forEach(a => state.selected.add(a.id)); renderAreas(); }
+function deselectAll() { state.selected.clear(); renderAreas(); }
+
+async function analyze() {
+  const url = $("url-input").value.trim();
+  if (!url) return;
+  state.url = url;
+  state.areas = [];
+  state.selected.clear();
+  state.results = null;
+  hideError();
+  setStatus("Analysiere Seite…", "loading");
+  $("analyze-btn").disabled = true;
+  $("analyze-btn").innerHTML = `<span class="spinner"></span> Analysiere…`;
+  $("areas-section").innerHTML = `<div class="no-areas">Lade…</div>`;
+  $("results-area").innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-title">Wird analysiert…</div></div>`;
+  $("summary-bar").style.display = "none";
+
+  try {
+    const res = await fetch("/api/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Fehler");
+
+    state.areas = data.areas;
+    $("page-title").textContent = data.title || url;
+    $("page-url").textContent = url;
+    setStatus(`${data.areas.length} Bereiche gefunden`, "ok");
+    renderAreas();
+    $("results-area").innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">${data.areas.length} Bereiche erkannt</div><div class="empty-sub">Bereiche auswählen und auf „Bereiche scrapen" klicken</div></div>`;
+  } catch(e) {
+    showError(e.message);
+    $("areas-section").innerHTML = `<div class="no-areas">Fehler bei der Analyse</div>`;
+  }
+
+  $("analyze-btn").disabled = false;
+  $("analyze-btn").innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Seite analysieren`;
+}
+
+async function scrape() {
+  const areaIds = [...state.selected];
+  if (!areaIds.length || !state.url) return;
+  hideError();
+  setStatus("Scrappe Daten…", "loading");
+  $("scrape-btn").disabled = true;
+  $("scrape-btn").innerHTML = `<span class="spinner dark"></span> <span>Scrappe…</span>`;
+  $("results-area").innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-title">Daten werden extrahiert…</div></div>`;
+  $("summary-bar").style.display = "none";
+  $("export-btn").disabled = true;
+  $("copy-btn").disabled = true;
+
+  try {
+    const res = await fetch("/api/scrape", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: state.url, areaIds }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Fehler");
+
+    state.results = data.results;
+    renderResults(data.results);
+    setStatus(`Scraping abgeschlossen — ${data.results.reduce((s, r) => s + r.items.length, 0)} Einträge`, "ok");
+    $("export-btn").disabled = false;
+    $("copy-btn").disabled = false;
+  } catch(e) {
+    showError(e.message);
+    $("results-area").innerHTML = `<div class="empty-state"><div class="empty-icon">❌</div><div class="empty-title">Scraping fehlgeschlagen</div></div>`;
+  }
+
+  $("scrape-btn").disabled = false;
+  $("scrape-btn").innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> <span id="scrape-btn-label">${areaIds.length} Bereich${areaIds.length > 1 ? "e" : ""} scrapen</span>`;
+}
+
+function renderResults(results) {
+  const totalItems = results.reduce((s, r) => s + r.items.length, 0);
+
+  const summaryBar = $("summary-bar");
+  summaryBar.style.display = "flex";
+  summaryBar.innerHTML = `
+    <div class="summary-stat"><div class="summary-val">${results.length}</div><div class="summary-lbl">Bereiche</div></div>
+    <div class="summary-stat"><div class="summary-val">${totalItems}</div><div class="summary-lbl">Einträge</div></div>
+    <div class="summary-stat"><div class="summary-val">${new URL(state.url).hostname}</div><div class="summary-lbl">Host</div></div>
+    <div class="summary-stat"><div class="summary-val">${new Date().toLocaleTimeString("de")}</div><div class="summary-lbl">Uhrzeit</div></div>
+  `;
+
+  let html = "";
+  for (const group of results) {
+    const area = state.areas.find(a => a.id === group.areaId);
+    const cat = area?.category || "text";
+    html += `<div class="result-group">
+      <div class="result-group-header">
+        <span class="count-pill ${catClass(cat)}">${escHtml(cat)}</span>
+        <span class="result-group-name">${escHtml(group.areaName)}</span>
+        <span class="result-group-selector">${escHtml(group.selector)}</span>
+        <span class="result-group-count">${group.items.length} Einträge</span>
+      </div>`;
+
+    for (const item of group.items) {
+      const isLink = item.value.startsWith("http://") || item.value.startsWith("https://") || item.value.startsWith("mailto:");
+      html += `<div class="result-row">
+        <span class="result-idx">${item.index}</span>
+        <div class="result-value">
+          ${isLink
+            ? `<a href="${escHtml(item.value)}" target="_blank" rel="noopener">${escHtml(item.value)}</a>`
+            : escHtml(item.value)}
+          ${item.extra ? `<div class="result-extra">${Object.entries(item.extra).map(([k,v]) => `<strong>${escHtml(k)}:</strong> ${escHtml(v)}`).join(" &nbsp;·&nbsp; ")}</div>` : ""}
+        </div>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+
+  $("results-area").innerHTML = html;
+}
+
+function copyResults() {
+  if (!state.results) return;
+  const lines = [];
+  for (const group of state.results) {
+    lines.push(`=== ${group.areaName} (${group.selector}) ===`);
+    for (const item of group.items) {
+      let line = `${item.index}. ${item.value}`;
+      if (item.extra) line += " | " + Object.entries(item.extra).map(([k,v]) => `${k}: ${v}`).join(", ");
+      lines.push(line);
+    }
+    lines.push("");
+  }
+  navigator.clipboard.writeText(lines.join("\n"));
+  $("copy-btn").textContent = "✓ Kopiert!";
+  setTimeout(() => {
+    $("copy-btn").innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Kopieren`;
+  }, 2000);
+}
+
+async function exportJson() {
+  if (!state.results) return;
+  const res = await fetch("/api/export", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ results: state.results, url: state.url }),
+  });
+  const blob = await res.blob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `scrape-${new URL(state.url).hostname}-${Date.now()}.json`;
+  a.click();
+}
+
+// Event bindings
+$("analyze-btn").addEventListener("click", analyze);
+$("url-input").addEventListener("keydown", e => { if (e.key === "Enter") analyze(); });
+$("scrape-btn").addEventListener("click", scrape);
+$("copy-btn").addEventListener("click", copyResults);
+$("export-btn").addEventListener("click", exportJson);
+</script>
+</body>
+</html>
