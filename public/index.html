@@ -135,6 +135,22 @@
 
   .no-areas { padding: 20px; text-align: center; color: var(--text3); font-size: 13px; }
 
+  /* Mode badge */
+  .logo-mode { font-size: 10px; color: var(--text3); margin-top: 5px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .mode-tag { display: inline-block; padding: 1px 6px; border-radius: 3px; font-weight: 600; font-size: 10px; }
+  .mode-tag.html { background: rgba(124,106,255,0.15); color: var(--accent); }
+  .mode-tag.custom { background: rgba(34,201,126,0.15); color: var(--green); }
+
+  /* Custom selectors section */
+  .custom-section { border-top: 1px solid var(--border); padding: 12px 16px 8px; }
+  .custom-form { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .custom-form input, .custom-form select { background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 11px; padding: 7px 10px; border-radius: 6px; outline: none; transition: border 0.15s; }
+  .custom-form input:focus, .custom-form select:focus { border-color: var(--accent); }
+  .custom-form input::placeholder { color: var(--text3); }
+  .cat-custom { background: rgba(34,201,126,0.15); color: var(--green); }
+  .area-delete { background: transparent; border: none; color: var(--text3); cursor: pointer; font-size: 13px; padding: 2px 5px; border-radius: 4px; flex-shrink: 0; line-height: 1; }
+  .area-delete:hover { color: var(--red); background: rgba(240,71,71,0.1); }
+
   @media (max-width: 700px) {
     .layout { grid-template-columns: 1fr; }
     .sidebar { height: auto; position: static; }
@@ -153,6 +169,9 @@
         <div>
           <div class="logo-text">Website Scraper</div>
           <div class="logo-sub">Basic v1.0</div>
+          <div class="logo-mode" id="logo-mode">
+            Modus: <span class="mode-tag html">HTML-Tags</span>
+          </div>
         </div>
       </div>
 
@@ -167,6 +186,26 @@
 
     <div class="areas-section" id="areas-section">
       <div class="no-areas" id="areas-empty">URL eingeben und analysieren</div>
+    </div>
+
+    <!-- Custom selectors -->
+    <div class="custom-section">
+      <div class="section-head">
+        <span class="section-label">Eigene Selektoren</span>
+        <button type="button" class="btn btn-ghost" id="custom-toggle-btn" onclick="toggleCustomForm()">+</button>
+      </div>
+      <div id="custom-form" class="custom-form" style="display:none">
+        <input id="custom-name" type="text" placeholder="Name (z.B. Suchergebnis-Titel)" />
+        <input id="custom-selector-input" type="text" placeholder="CSS-Selektor (z.B. h3.LC20lb)" />
+        <select id="custom-category">
+          <option value="text">Text</option>
+          <option value="link">Link</option>
+          <option value="number">Zahl</option>
+          <option value="media">Media</option>
+        </select>
+        <button type="button" class="btn btn-ghost" onclick="addCustomArea()">Hinzufügen</button>
+      </div>
+      <div id="custom-areas-list"></div>
     </div>
 
     <div class="sidebar-footer">
@@ -221,6 +260,7 @@ let state = {
   selected: new Set(),
   results: null,
   loading: false,
+  customAreas: [],
 };
 
 const $ = id => document.getElementById(id);
@@ -278,7 +318,11 @@ function renderAreas() {
     </div>`;
   }
   section.innerHTML = html;
+  updateScrapeButton();
+}
 
+function updateScrapeButton() {
+  const selCount = state.selected.size;
   const scrapeBtn = $("scrape-btn");
   const label = $("scrape-btn-label");
   if (selCount > 0) {
@@ -294,10 +338,20 @@ function toggleArea(id) {
   if (state.selected.has(id)) state.selected.delete(id);
   else state.selected.add(id);
   renderAreas();
+  renderCustomAreas();
 }
 
-function selectAll() { state.areas.forEach(a => state.selected.add(a.id)); renderAreas(); }
-function deselectAll() { state.selected.clear(); renderAreas(); }
+function selectAll() {
+  state.areas.forEach(a => state.selected.add(a.id));
+  state.customAreas.forEach(a => state.selected.add(a.id));
+  renderAreas();
+  renderCustomAreas();
+}
+function deselectAll() {
+  state.selected.clear();
+  renderAreas();
+  renderCustomAreas();
+}
 
 async function analyze() {
   const url = $("url-input").value.trim();
@@ -339,8 +393,9 @@ async function analyze() {
 }
 
 async function scrape() {
-  const areaIds = [...state.selected];
-  if (!areaIds.length || !state.url) return;
+  const selectedCustomAreas = state.customAreas.filter(a => state.selected.has(a.id));
+  const areaIds = [...state.selected].filter(id => !id.startsWith("custom_"));
+  if ((!areaIds.length && !selectedCustomAreas.length) || !state.url) return;
   hideError();
   setStatus("Scrappe Daten…", "loading");
   $("scrape-btn").disabled = true;
@@ -354,7 +409,7 @@ async function scrape() {
     const res = await fetch("/api/scrape", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: state.url, areaIds }),
+      body: JSON.stringify({ url: state.url, areaIds, customAreas: selectedCustomAreas }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Fehler");
@@ -387,7 +442,8 @@ function renderResults(results) {
 
   let html = "";
   for (const group of results) {
-    const area = state.areas.find(a => a.id === group.areaId);
+    const area = state.areas.find(a => a.id === group.areaId)
+      || state.customAreas.find(a => a.id === group.areaId);
     const cat = area?.category || "text";
     html += `<div class="result-group">
       <div class="result-group-header">
@@ -446,6 +502,67 @@ async function exportJson() {
   a.href = URL.createObjectURL(blob);
   a.download = `scrape-${new URL(state.url).hostname}-${Date.now()}.json`;
   a.click();
+}
+
+// Custom selector functions
+function toggleCustomForm() {
+  const form = $("custom-form");
+  const isOpen = form.style.display !== "none";
+  form.style.display = isOpen ? "none" : "flex";
+  $("custom-toggle-btn").textContent = isOpen ? "+" : "−";
+}
+
+function addCustomArea() {
+  const name = $("custom-name").value.trim();
+  const selector = $("custom-selector-input").value.trim();
+  const category = $("custom-category").value;
+  if (!name || !selector) return;
+  const id = "custom_" + Date.now();
+  state.customAreas.push({ id, name, selector, category });
+  $("custom-name").value = "";
+  $("custom-selector-input").value = "";
+  state.selected.add(id);
+  renderCustomAreas();
+  updateModeBadge();
+  updateScrapeButton();
+}
+
+function removeCustomArea(id) {
+  state.customAreas = state.customAreas.filter(a => a.id !== id);
+  state.selected.delete(id);
+  renderCustomAreas();
+  updateModeBadge();
+  updateScrapeButton();
+}
+
+function renderCustomAreas() {
+  const list = $("custom-areas-list");
+  if (!state.customAreas.length) { list.innerHTML = ""; return; }
+  let html = "";
+  for (const area of state.customAreas) {
+    const sel = state.selected.has(area.id);
+    html += `<div class="area-item ${sel ? 'selected' : ''}" onclick="toggleArea('${area.id}')">
+      <input type="checkbox" ${sel ? "checked" : ""} onclick="event.stopPropagation(); toggleArea('${area.id}')" />
+      <div class="area-info">
+        <div class="area-name">${escHtml(area.name)}</div>
+        <div class="area-meta">
+          <span class="area-selector">${escHtml(area.selector)}</span>
+          <span class="count-pill cat-custom">Eigene</span>
+        </div>
+      </div>
+      <button type="button" class="area-delete" onclick="event.stopPropagation(); removeCustomArea('${area.id}')" title="Entfernen">✕</button>
+    </div>`;
+  }
+  list.innerHTML = html;
+}
+
+function updateModeBadge() {
+  const badge = $("logo-mode");
+  if (state.customAreas.length > 0) {
+    badge.innerHTML = `Modus: <span class="mode-tag html">HTML-Tags</span> <span class="mode-tag custom">Seitenspezifisch</span>`;
+  } else {
+    badge.innerHTML = `Modus: <span class="mode-tag html">HTML-Tags</span>`;
+  }
 }
 
 // Event bindings

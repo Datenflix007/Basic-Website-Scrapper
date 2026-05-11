@@ -24,6 +24,13 @@ export interface ScrapeItem {
   extra?: Record<string, string>;
 }
 
+export interface CustomArea {
+  id: string;
+  name: string;
+  selector: string;
+  category: "text" | "link" | "number" | "media" | "meta" | "table";
+}
+
 export interface AnalyzeResponse {
   url: string;
   title: string;
@@ -125,7 +132,20 @@ export async function analyzeUrl(url: string): Promise<AnalyzeResponse> {
   return { url, title, areas };
 }
 
-export async function scrapeAreas(url: string, areaIds: string[]): Promise<ScrapeResult[]> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractCustomItem($el: any, index: number): ScrapeItem | null {
+  if (!$el[0]) return null;
+  const href = $el.attr("href");
+  if (href) {
+    const text = $el.text().trim();
+    return { index, value: href, extra: text ? { text } : undefined };
+  }
+  const text = $el.text().trim().replace(/\s+/g, " ");
+  if (!text) return null;
+  return { index, value: text.length > 300 ? text.slice(0, 300) + "…" : text };
+}
+
+export async function scrapeAreas(url: string, areaIds: string[], customAreas: CustomArea[] = []): Promise<ScrapeResult[]> {
   const { data: html } = await axios.get(url, {
     timeout: 10000,
     headers: { "User-Agent": "Mozilla/5.0 (compatible; BasicScraper/1.0)" },
@@ -152,6 +172,25 @@ export async function scrapeAreas(url: string, areaIds: string[]): Promise<Scrap
       areaId: area.id,
       areaName: area.name,
       selector: area.selector,
+      items,
+      scrapedAt: new Date().toISOString(),
+    });
+  }
+
+  for (const custom of customAreas) {
+    const items: ScrapeItem[] = [];
+    let index = 0;
+
+    $(custom.selector).each((_, el) => {
+      if (items.length >= 100) return false;
+      const item = extractCustomItem($(el), ++index);
+      if (item) items.push(item);
+    });
+
+    results.push({
+      areaId: custom.id,
+      areaName: custom.name,
+      selector: custom.selector,
       items,
       scrapedAt: new Date().toISOString(),
     });

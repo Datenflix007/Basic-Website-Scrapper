@@ -30,17 +30,19 @@ app.post("/api/analyze", async (req, res) => {
 });
 // Scrape endpoint: extract selected areas
 app.post("/api/scrape", async (req, res) => {
-    const { url, areaIds } = req.body;
+    const { url, areaIds, customAreas } = req.body;
     if (!url || !url.startsWith("http")) {
         res.status(400).json({ error: "Gültige URL erforderlich." });
         return;
     }
-    if (!Array.isArray(areaIds) || areaIds.length === 0) {
+    const hasBuiltin = Array.isArray(areaIds) && areaIds.length > 0;
+    const hasCustom = Array.isArray(customAreas) && customAreas.length > 0;
+    if (!hasBuiltin && !hasCustom) {
         res.status(400).json({ error: "Mindestens einen Bereich auswählen." });
         return;
     }
     try {
-        const results = await (0, scraper_1.scrapeAreas)(url, areaIds);
+        const results = await (0, scraper_1.scrapeAreas)(url, areaIds ?? [], customAreas ?? []);
         res.json({ results });
     }
     catch (err) {

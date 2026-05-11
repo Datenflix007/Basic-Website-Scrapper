@@ -1,7 +1,7 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import path from "path";
-import { analyzeUrl, scrapeAreas } from "./scraper";
+import { analyzeUrl, scrapeAreas, CustomArea } from "./scraper";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -28,17 +28,19 @@ app.post("/api/analyze", async (req: Request, res: Response) => {
 
 // Scrape endpoint: extract selected areas
 app.post("/api/scrape", async (req: Request, res: Response) => {
-  const { url, areaIds } = req.body as { url?: string; areaIds?: string[] };
+  const { url, areaIds, customAreas } = req.body as { url?: string; areaIds?: string[]; customAreas?: CustomArea[] };
   if (!url || !url.startsWith("http")) {
     res.status(400).json({ error: "Gültige URL erforderlich." });
     return;
   }
-  if (!Array.isArray(areaIds) || areaIds.length === 0) {
+  const hasBuiltin = Array.isArray(areaIds) && areaIds.length > 0;
+  const hasCustom = Array.isArray(customAreas) && customAreas.length > 0;
+  if (!hasBuiltin && !hasCustom) {
     res.status(400).json({ error: "Mindestens einen Bereich auswählen." });
     return;
   }
   try {
-    const results = await scrapeAreas(url, areaIds);
+    const results = await scrapeAreas(url, areaIds ?? [], customAreas ?? []);
     res.json({ results });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Unbekannter Fehler";
